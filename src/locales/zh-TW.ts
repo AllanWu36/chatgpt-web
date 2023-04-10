@@ -27,6 +27,7 @@ export default {
     failed: '操作失敗',
     register: '註冊',
     login: '登錄',
+    resetpwd :'重置密碼',
     notLoggedIn: '登錄 / 註冊',
     logOut: '退出登錄',
     unauthorizedTips: '未經授權，請先進行驗證。',

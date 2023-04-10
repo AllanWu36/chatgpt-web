@@ -19,6 +19,7 @@ export class UserInfo {
   verifyTime?: string
   avatar?: string
   description?: string
+  token?: string
   constructor(email: string, password: string) {
     this.name = email
     this.email = email
@@ -59,6 +60,7 @@ export class ChatOptions {
 
 export class previousResponse {
   response: string
+  messageId: string
   options: ChatOptions
 }
 
@@ -151,3 +153,5 @@ export class MailConfig {
     public smtpPassword: string,
   ) { }
 }
+
+

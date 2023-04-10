@@ -163,3 +163,10 @@ export function fetchUpdateBaseSetting<T = any>(config: ConfigState) {
     data: config,
   })
 }
+
+export function fetchResetPassword<T = any>(username: string, password: string) {
+  return post<T>({
+    url: '/reset-password',
+    data: { username, password },
+  })
+}

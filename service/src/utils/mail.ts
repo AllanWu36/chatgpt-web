@@ -38,6 +38,19 @@ export async function sendNoticeMail(toMail: string) {
   sendMail(toMail, `${config.siteConfig.siteTitle} 账号开通`, mailHtml, config.mailConfig)
 }
 
+export async function sendMailOnResetPassword(toMail: string, verifyUrl: string) {
+  const config = (await getCacheConfig())
+
+  const templatesPath = path.join(__dirname, 'templates')
+  const mailTemplatePath = path.join(templatesPath, 'MailOnResetPassword.template.html')
+  let mailHtml = fs.readFileSync(mailTemplatePath, 'utf8')
+  mailHtml = mailHtml.replace(/\${VERIFY_URL}/g, verifyUrl)
+  mailHtml = mailHtml.replace(/\${SITE_TITLE}/g, config.siteConfig.siteTitle)
+  mailHtml = mailHtml.replace(/\${TO_MAIL}/g, toMail)
+  sendMail(toMail, `${config.siteConfig.siteTitle} 重置密码`, mailHtml, config.mailConfig)
+
+}
+
 export async function sendTestMail(toMail: string, config: MailConfig) {
   return sendMail(toMail, '测试邮件|Test mail', '这是一封测试邮件|This is test mail', config)
 }
@@ -59,6 +72,15 @@ async function sendMail(toMail: string, subject: string, html: string, config: M
       pass: config.smtpPassword,
     },
   })
-  const info = await transporter.sendMail(mailOptions)
-  return info.messageId
+//   const info = await transporter.sendMail(mailOptions)
+//   return info.messageId
+  
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error)
+      console.log("发送邮件到"+toMail+"错误")
+    else{
+        console.log("发送邮件到"+toMail+"成功")
+        return info.messageId
+    }
+  })
 }

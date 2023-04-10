@@ -26,6 +26,7 @@ export default {
     failed: '작업 실패',
     register: '등록',
     login: '로그인',
+    resetpwd :'비밀번호 초기화',
     notLoggedIn: '로그인/등록',
     logOut: '로그아웃',
     unauthorizedTips: '승인되지 않음, 로그인 해주세요.',

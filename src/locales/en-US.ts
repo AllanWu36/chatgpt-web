@@ -27,6 +27,7 @@ export default {
     failed: 'Failed',
     register: 'Register',
     login: 'Login',
+    resetpwd :'Restpwd',
     notLoggedIn: 'Login / Register',
     logOut: 'Login Out',
     unauthorizedTips: 'Unauthorized, please verify first.',

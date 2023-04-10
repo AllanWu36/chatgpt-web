@@ -6,13 +6,13 @@ import type { ChatOptions, Config, UsageResponse } from './model'
 dotenv.config()
 
 const url = process.env.MONGODB_URL
+console.log("mongodbUrl=========="+url)
 const client = new MongoClient(url)
 const chatCol = client.db('chatgpt').collection('chat')
 const roomCol = client.db('chatgpt').collection('chat_room')
 const userCol = client.db('chatgpt').collection('user')
 const configCol = client.db('chatgpt').collection('config')
 const usageCol = client.db('chatgpt').collection('chat_usage')
-
 /**
  * 插入聊天信息
  * @param text 内容 prompt or response
@@ -30,7 +30,7 @@ export async function getChat(roomId: number, uuid: number) {
   return await chatCol.findOne({ roomId, uuid })
 }
 
-export async function updateChat(chatId: string, response: string, messageId: string, usage: UsageResponse, previousResponse?: []) {
+export async function updateChat(chatId: string, response: string, messageId: string, previousResponse?: []) {
   const query = { _id: new ObjectId(chatId) }
   const update = {
     $set: {
@@ -54,6 +54,7 @@ export async function insertChatUsage(userId: string, roomId: number, chatId: Ob
   await usageCol.insertOne(chatUsage)
   return chatUsage
 }
+
 
 export async function createChatRoom(userId: string, title: string, roomId: number) {
   const room = new ChatRoom(userId, title, roomId)
@@ -183,4 +184,23 @@ export async function updateConfig(config: Config): Promise<Config> {
   if (result.modifiedCount > 0 || result.upsertedCount > 0)
     return config
   return null
+}
+
+export async function updateUserPassword(userId: ObjectId, password: string) {
+  const result = userCol.updateOne({ _id: userId }
+    , { $set: { password: password} })
+  return result
+}
+
+export async function updateUserToken(userId: ObjectId, token: string) {
+  const result = userCol.updateOne({ _id: userId }
+    , { $set: { token: token} })
+  return result
+}
+
+export async function getUserToken(userId: string): string {
+   const query = { _id: new ObjectId(userId) };
+   const options = { projection: { token: 1 } }
+   const result:UserInfo = await userCol.findOne(query, options) as UserInfo
+   return result ? result.token : null
 }

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NInput, NModal, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchLogin, fetchRegister, fetchVerify, fetchVerifyAdmin } from '@/api'
+import { fetchLogin, fetchRegister, fetchVerify, fetchVerifyAdmin,fetchResetPassword } from '@/api'
 import { useAuthStore } from '@/store'
 import Icon403 from '@/icons/403.vue'
 
@@ -137,6 +137,28 @@ async function handleRegister() {
     loading.value = false
   }
 }
+async function handleResetPassword() {
+  const name = username.value.trim()
+  const pwd = password.value.trim()
+  const confirmPwd = confirmPassword.value.trim()
+
+  if (!name || !pwd || !confirmPwd || pwd !== confirmPwd) {
+    ms.error('两次输入的密码不一致 | Passwords don\'t match')
+    return
+  }
+
+  try {
+    loading.value = true
+    const result = await fetchResetPassword(name, pwd)
+    ms.success(result.message as string)
+  }
+  catch (error: any) {
+    ms.error(error.message ?? 'error')
+  }
+  finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -178,6 +200,24 @@ async function handleRegister() {
 
             <NButton block type="primary" :disabled="disabled || password !== confirmPassword" :loading="loading" @click="handleRegister">
               {{ $t('common.register') }}
+            </NButton>
+          </NTabPane>
+          
+            <NTabPane name="resetpwd" :label="$t('common.resetpwd')">
+            <!--<NTabPane name="resetpwd" label="$t('common.resetpwd')">-->
+            <NInput v-model:value="username" type="text" :placeholder="$t('common.email')" class="mb-2" />
+            <NInput v-model:value="password" type="password" :placeholder="$t('common.password')" class="mb-2" @input="handlePasswordInput" />
+            <NInput
+              v-if="showConfirmPassword"
+              v-model:value="confirmPassword"
+              type="password"
+              :placeholder="$t('common.passwordConfirm')"
+              class="mb-4"
+              :status="confirmPasswordStatus"
+            />
+
+            <NButton block type="primary" :disabled="disabled || password !== confirmPassword" :loading="loading" @click="handleResetPassword">
+              {{ $t('common.resetpwd') }}
             </NButton>
           </NTabPane>
         </NTabs>

@@ -1,10 +1,11 @@
+import './config'; // 首先加载 config.ts 文件
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import * as dotenv from 'dotenv'
 import type { RequestProps } from './types'
 import type { ChatContext, ChatMessage } from './chatgpt'
 import { chatConfig, chatReplyProcess, currentModel, initApi } from './chatgpt'
-import { auth } from './middleware/auth'
+import { auth,tokenMap } from './middleware/auth'
 import { clearConfigCache, getCacheConfig, getOriginConfig } from './storage/config'
 import type { ChatOptions, Config, MailConfig, SiteConfig, UsageResponse, UserInfo } from './storage/model'
 import { Status } from './storage/model'
@@ -28,12 +29,17 @@ import {
   updateConfig,
   updateUserInfo,
   verifyUser,
+  updateUserPassword,
+  updateUserToken,
+  getUserToken
 } from './storage/mongo'
 import { limiter } from './middleware/limiter'
 import { isEmail, isNotEmptyString } from './utils/is'
-import { sendNoticeMail, sendTestMail, sendVerifyMail, sendVerifyMailAdmin } from './utils/mail'
+import { sendNoticeMail, sendTestMail, sendVerifyMail, sendVerifyMailAdmin,sendMailOnResetPassword } from './utils/mail'
 import { checkUserVerify, checkUserVerifyAdmin, getUserVerifyUrl, getUserVerifyUrlAdmin, md5 } from './utils/security'
 import { rootAuth } from './middleware/rootAuth'
+import { ObjectId } from 'mongodb'
+
 
 dotenv.config()
 
@@ -303,6 +309,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       }
     }
   }
+  
   catch (error) {
     res.write(JSON.stringify(error))
   }
@@ -339,12 +346,21 @@ router.post('/user-register', async (req, res) => {
     }
 
     const user = await getUser(username)
-    if (user != null) {
-      res.send({ status: 'Fail', message: '邮箱已存在 | The email exists', data: null })
-      return
-    }
+    
     const newPassword = md5(password)
-    await createUser(username, newPassword)
+    if (user != null && user.status === Status.PreVerify){
+      await updateUserPassword(user._id,newPassword)
+  }else  if (user != null && user.status === Status.AdminVerify){
+    res.send({ status: 'Fail', message: '邮箱注册已验证，请等待管理员审核', data: null })
+    return
+  }else  if (user != null) {
+    res.send({ status: 'Fail', message: '邮箱已存在 | The email exists', data: null })
+    return
+  } 
+  else{
+      await createUser(username, newPassword)
+  }
+    
 
     if (username.toLowerCase() === process.env.ROOT_USER) {
       res.send({ status: 'Success', message: '注册成功 | Register success', data: null })
@@ -411,6 +427,8 @@ router.post('/user-login', async (req, res) => {
       userId: user._id,
       root: username.toLowerCase() === process.env.ROOT_USER,
     }, config.siteConfig.loginSalt.trim())
+    await updateUserToken(user._id,token)
+    tokenMap.set(user._id.toString(),token)
     res.send({ status: 'Success', message: '登录成功 | Login successfully', data: { token } })
   }
   catch (error) {
@@ -448,11 +466,13 @@ router.post('/verify', async (req, res) => {
     const config = await getCacheConfig()
     let message = '验证成功 | Verify successfully'
     if (config.siteConfig.registerReview) {
+      console.log(username+"验证成功, 请等待管理员开通")
       await verifyUser(username, Status.AdminVerify)
       await sendVerifyMailAdmin(process.env.ROOT_USER, username, await getUserVerifyUrlAdmin(username))
       message = '验证成功, 请等待管理员开通 | Verify successfully, Please wait for the admin to activate'
     }
     else {
+      console.log(username+"验证成功, 不需要管理员开通")
       await verifyUser(username, Status.Normal)
     }
     res.send({ status: 'Success', message, data: null })
@@ -555,5 +575,105 @@ router.post('/mail-test', rootAuth, async (req, res) => {
 app.use('', router)
 app.use('/api', router)
 app.set('trust proxy', 1)
+
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { username, password } = req.body as { username: string; password: string }
+    if (!username || !password)
+      throw new Error('用户名或密码为空 | Username or password is empty')
+
+    const user = await getUser(username)
+    if (user == null
+      || user.status !== Status.Normal
+      || user.password !== md5(password)) {
+      if (user != null && user.status === Status.PreVerify)
+        throw new Error('你的注册信息还未认证，请先去邮箱中验证 | Please verify in the mailbox')
+    }
+    const config = await getCacheConfig()
+    const timestamp = new Date().getTime()
+    let verifytoken =password+'-'+md5(password)+'-'+timestamp+'-'+user._id
+    console.log('加密前'+verifytoken)
+    verifytoken =obfuscateString(verifytoken)
+    let verifyUrl = process.env.SITE_DOMAIN+'/api/resetpwd-verify?verifytoken='+verifytoken
+    await sendMailOnResetPassword(username,verifyUrl)
+    res.send({ status: 'Success', message: '重置密码成功,请去邮箱中验证', data: null })
+
+  }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
+router.get('/resetpwd-verify', async (req, res) => {
+    try {
+     resetpwdVerify(req,res)
+    }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+router.get('/api/resetpwd-verify', async (req, res) => {
+    try {
+     resetpwdVerify(req,res)
+    }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+async function resetpwdVerify(req, res){
+   let verifytoken = req.query.verifytoken
+    // console.log('verifytoken=='+verifytoken)
+    verifytoken =deobfuscateString(verifytoken)
+    // console.log('解密后'+verifytoken)
+    const parts = verifytoken.split("-")
+    let password = md5(parts[0])
+    if(password !== parts[1]){
+        res.send({ status: 'Fail', message: '验证失败，验证token不正确', data: null })
+        return
+    }
+    const timestamp = new Date().getTime()
+    let diffMin = (timestamp-parts[2])/1000/60
+    if(diffMin>30){
+        res.send({ status: 'Fail', message: '验证失败，链接已超时', data: null })
+        return
+    }
+    await updateUserPassword(new ObjectId(parts[3]),password)
+    res.send({ status: 'Success', message: '重置密码成功 | Verify successfully', data: null })
+    // res.send({ status: 'Success', message: '验证成功 | Verify successfully', data: null })
+}
+
+
+ function obfuscateString(str: string): string {
+     
+    try{ let key = 8324
+      let result = "";
+      for (let i = 0; i < str.length; i++) {
+          const charCode = str.charCodeAt(i);
+          const newCharCode = charCode + key;
+          result += String.fromCharCode(newCharCode);
+     }
+       return result
+     }
+     catch(error){
+         return str
+     }
+}
+
+ function deobfuscateString(obfuscatedStr: string ): string {
+     try{
+         let key = 8324
+         let result = ""
+        for (let i = 0; i < obfuscatedStr.length; i++) {
+           const charCode = obfuscatedStr.charCodeAt(i)
+           const originalCharCode = charCode - key
+           result += String.fromCharCode(originalCharCode)
+            
+        }
+      return result 
+     }catch(error){
+         return obfuscatedStr 
+     }
+}
 
 app.listen(3002, () => globalThis.console.log('Server is running on port 3002'))

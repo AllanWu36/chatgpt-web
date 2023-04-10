@@ -27,6 +27,7 @@ export default {
     failed: '操作失败',
     register: '注册',
     login: '登录',
+    resetpwd :'重置密码',
     notLoggedIn: '登录 / 注册',
     logOut: '退出登录',
     unauthorizedTips: '未经授权，请先进行验证。',
