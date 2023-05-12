@@ -403,7 +403,7 @@ router.post('/session', async (req, res) => {
   }
 })
 
-router.post('/user-login', async (req, res) => {
+router.post('/user-web-login', async (req, res) => {
   try {
     const { username, password } = req.body as { username: string; password: string }
     if (!username || !password || !isEmail(username))

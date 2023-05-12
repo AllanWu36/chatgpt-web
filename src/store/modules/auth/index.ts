@@ -42,14 +42,14 @@ export const useAuthStore = defineStore('auth-store', {
 
     async setToken(token: string) {
       this.token = token
-      const decoded = jwt_decode(token) as UserInfo
-      const userStore = useUserStore()
-      await userStore.updateUserInfo(false, {
-        avatar: decoded.avatar,
-        name: decoded.name,
-        description: decoded.description,
-        root: decoded.root,
-      })
+      // const decoded = jwt_decode(token) as UserInfo
+      // const userStore = useUserStore()
+      // await userStore.updateUserInfo(false, {
+      //   avatar: decoded.avatar,
+      //   name: decoded.name,
+      //   description: decoded.description,
+      //   root: decoded.root,
+      // })
       setToken(token)
     },
 

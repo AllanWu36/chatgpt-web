@@ -102,7 +102,7 @@ async function handleLogin() {
   try {
     loading.value = true
     const result = await fetchLogin(name, pwd)
-    await authStore.setToken(result.data.token)
+    await authStore.setToken(result.data.accessToken)
     ms.success('success')
     router.go(0)
   }
