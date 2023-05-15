@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NInput, NModal, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchLogin, fetchRegister, fetchVerify, fetchVerifyAdmin,fetchResetPassword } from '@/api'
+import { fetchLogin, fetchRegister, fetchResetPassword, fetchVerify, fetchVerifyAdmin } from '@/api'
 import { useAuthStore } from '@/store'
 import Icon403 from '@/icons/403.vue'
 
@@ -102,7 +102,7 @@ async function handleLogin() {
   try {
     loading.value = true
     const result = await fetchLogin(name, pwd)
-    await authStore.setToken(result.data.accessToken)
+    await authStore.setToken(result.data.token)
     ms.success('success')
     router.go(0)
   }
@@ -202,9 +202,9 @@ async function handleResetPassword() {
               {{ $t('common.register') }}
             </NButton>
           </NTabPane>
-          
-            <NTabPane name="resetpwd" :label="$t('common.resetpwd')">
-            <!--<NTabPane name="resetpwd" label="$t('common.resetpwd')">-->
+
+          <NTabPane name="resetpwd" :label="$t('common.resetpwd')">
+            <!-- <NTabPane name="resetpwd" label="$t('common.resetpwd')"> -->
             <NInput v-model:value="username" type="text" :placeholder="$t('common.email')" class="mb-2" />
             <NInput v-model:value="password" type="password" :placeholder="$t('common.password')" class="mb-2" @input="handlePasswordInput" />
             <NInput
