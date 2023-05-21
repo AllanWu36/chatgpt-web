@@ -2,15 +2,25 @@
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NInput, NModal, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchLogin, fetchRegister, fetchResetPassword, fetchVerify, fetchVerifyAdmin } from '@/api'
+import { fetchLogin, fetchRegister, fetchResetPassword, fetchSendResetMail, fetchVerify, fetchVerifyAdmin } from '@/api'
 import { useAuthStore } from '@/store'
-import Icon403 from '@/icons/403.vue'
 
 interface Props {
   visible: boolean
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+const emit = defineEmits<Emit>()
+
+interface Emit {
+  (e: 'update:visible', visible: boolean): void
+}
+
+const show = computed({
+  get: () => props.visible,
+  set: (visible: boolean) => emit('update:visible', visible),
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +31,7 @@ const ms = useMessage()
 const loading = ref(false)
 const username = ref('')
 const password = ref('')
+const sign = ref('')
 
 const disabled = computed(() => !username.value.trim() || !password.value.trim() || loading.value)
 
@@ -44,6 +55,12 @@ onMounted(async () => {
   await handleVerify(verifytoken)
   const verifytokenadmin = route.query.verifytokenadmin as string
   await handleVerifyAdmin(verifytokenadmin)
+  sign.value = route.query.verifyresetpassword as string
+  if (sign.value) {
+    username.value = sign.value.split('-')[0].split('|')[0]
+    activeTab.value = 'resetPassword'
+    show.value = true
+  }
 })
 
 async function handleVerify(verifytoken: string) {
@@ -53,8 +70,8 @@ async function handleVerify(verifytoken: string) {
 
   try {
     loading.value = true
-    await fetchVerify(secretKey)
-    ms.success('验证成功, 请等待管理员开通 | Verify successfully, Please wait for the admin to activate')
+    const result = await fetchVerify(secretKey)
+    ms.success(result.message as string)
     router.replace('/')
   }
   catch (error: any) {
@@ -137,6 +154,26 @@ async function handleRegister() {
     loading.value = false
   }
 }
+
+async function handleSendResetMail() {
+  const name = username.value.trim()
+
+  if (!name)
+    return
+
+  try {
+    loading.value = true
+    const result = await fetchSendResetMail(name)
+    ms.success(result.message as string)
+  }
+  catch (error: any) {
+    ms.error(error.message ?? 'error')
+  }
+  finally {
+    loading.value = false
+  }
+}
+
 async function handleResetPassword() {
   const name = username.value.trim()
   const pwd = password.value.trim()
@@ -149,7 +186,7 @@ async function handleResetPassword() {
 
   try {
     loading.value = true
-    const result = await fetchResetPassword(name, pwd)
+    const result = await fetchResetPassword(name, pwd, sign.value)
     ms.success(result.message as string)
   }
   catch (error: any) {
@@ -162,17 +199,13 @@ async function handleResetPassword() {
 </script>
 
 <template>
-  <NModal :show="visible" style="width: 90%; max-width: 640px">
+  <NModal :show="visible" style="width: 90%; max-width: 440px">
     <div class="p-10 bg-white rounded dark:bg-slate-800">
       <div class="space-y-4">
         <header class="space-y-2">
           <h2 class="text-2xl font-bold text-center text-slate-800 dark:text-neutral-200">
-            403
+            {{ $t('common.notLoggedIn') }}
           </h2>
-          <p class="text-base text-center text-slate-500 dark:text-slate-500">
-            {{ $t('common.unauthorizedTips') }}
-          </p>
-          <Icon403 class="w-[200px] m-auto" />
         </header>
 
         <!-- Add Tabs -->
@@ -203,10 +236,9 @@ async function handleResetPassword() {
             </NButton>
           </NTabPane>
 
-          <NTabPane name="resetpwd" :label="$t('common.resetpwd')">
-            <!-- <NTabPane name="resetpwd" label="$t('common.resetpwd')"> -->
-            <NInput v-model:value="username" type="text" :placeholder="$t('common.email')" class="mb-2" />
-            <NInput v-model:value="password" type="password" :placeholder="$t('common.password')" class="mb-2" @input="handlePasswordInput" />
+          <NTabPane name="resetPassword" :tab="$t('common.resetPassword')">
+            <NInput v-model:value="username" :disabled="sign !== undefined" type="text" :placeholder="$t('common.email')" class="mb-2" />
+            <NInput v-if="!!sign" v-model:value="password" type="password" :placeholder="$t('common.password')" class="mb-2" @input="handlePasswordInput" />
             <NInput
               v-if="showConfirmPassword"
               v-model:value="confirmPassword"
@@ -215,9 +247,11 @@ async function handleResetPassword() {
               class="mb-4"
               :status="confirmPasswordStatus"
             />
-
-            <NButton block type="primary" :disabled="disabled || password !== confirmPassword" :loading="loading" @click="handleResetPassword">
-              {{ $t('common.resetpwd') }}
+            <NButton v-if="!sign" block type="primary" :disabled="username.length <= 0" :loading="loading" @click="handleSendResetMail">
+              {{ $t('common.resetPasswordMail') }}
+            </NButton>
+            <NButton v-else block type="primary" :disabled="disabled || password !== confirmPassword" :loading="loading" @click="handleResetPassword">
+              {{ $t('common.resetPassword') }}
             </NButton>
           </NTabPane>
         </NTabs>

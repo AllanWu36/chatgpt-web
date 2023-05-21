@@ -4,11 +4,15 @@ const LOCAL_NAME = 'settingsStorage'
 
 export interface SettingsState {
   systemMessage: string
+  temperature: number
+  top_p: number
 }
 
 export function defaultSetting(): SettingsState {
   return {
-    systemMessage: '如果没有特别指定，请用简体中文和markdown格式回复。',
+    systemMessage: 'You are ChatGPT, a large language model trained by OpenAI. Follow the user\'s instructions carefully. Respond using markdown.',
+    temperature: 0.8,
+    top_p: 1,
   }
 }
 

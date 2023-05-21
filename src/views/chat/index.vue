@@ -1,6 +1,6 @@
 <script setup lang='ts'>
 import type { Ref } from 'vue'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import type { MessageReactive } from 'naive-ui'
@@ -9,15 +9,16 @@ import html2canvas from 'html2canvas'
 import { Message } from './components'
 import { useScroll } from './hooks/useScroll'
 import { useChat } from './hooks/useChat'
-import { useCopyCode } from './hooks/useCopyCode'
 import { useUsingContext } from './hooks/useUsingContext'
 import HeaderComponent from './components/Header/index.vue'
 import { HoverButton, SvgIcon } from '@/components/common'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { useChatStore, usePromptStore } from '@/store'
+import { useAuthStore, useChatStore, usePromptStore } from '@/store'
 import { fetchChatAPIProcess } from '@/api'
 import { t } from '@/locales'
 import { debounce } from '@/utils/functions/debounce'
+import IconPrompt from '@/icons/Prompt.vue'
+const Prompt = defineAsyncComponent(() => import('@/components/common/Setting/Prompt.vue'))
 
 let controller = new AbortController()
 
@@ -26,10 +27,9 @@ const openLongReply = import.meta.env.VITE_GLOB_OPEN_LONG_REPLY === 'true'
 const route = useRoute()
 const dialog = useDialog()
 const ms = useMessage()
+const authStore = useAuthStore()
 
 const chatStore = useChatStore()
-
-useCopyCode()
 
 const { isMobile } = useBasicLayout()
 const { addChat, updateChat, updateChatSome, getChatByUuidAndIndex } = useChat()
@@ -39,12 +39,13 @@ const { usingContext, toggleUsingContext } = useUsingContext()
 const { uuid } = route.params as { uuid: string }
 
 const dataSources = computed(() => chatStore.getChatByUuid(+uuid))
-const conversationList = computed(() => dataSources.value.filter(item => (!item.inversion && !item.error)))
+const conversationList = computed(() => dataSources.value.filter(item => (!item.inversion && !!item.conversationOptions)))
 
 const prompt = ref<string>('')
 const firstLoading = ref<boolean>(false)
 const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
+const showPrompt = ref(false)
 
 let loadingms: MessageReactive
 let allmsg: MessageReactive
@@ -135,6 +136,14 @@ async function onConversation() {
             chunk = responseText.substring(lastIndex)
           try {
             const data = JSON.parse(chunk)
+            const usage = (data.detail && data.detail.usage)
+              ? {
+                  completion_tokens: data.detail.usage.completion_tokens || null,
+                  prompt_tokens: data.detail.usage.prompt_tokens || null,
+                  total_tokens: data.detail.usage.total_tokens || null,
+                  estimated: data.detail.usage.estimated || null,
+                }
+              : undefined
             updateChat(
               +uuid,
               dataSources.value.length - 1,
@@ -146,10 +155,11 @@ async function onConversation() {
                 loading: true,
                 conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
                 requestOptions: { prompt: message, options: { ...options } },
+                usage,
               },
             )
 
-            if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+            if (openLongReply && data.detail && data.detail.choices.length > 0 && data.detail.choices[0].finish_reason === 'length') {
               options.parentMessageId = data.id
               lastText = data.text
               message = ''
@@ -269,6 +279,14 @@ async function onRegenerate(index: number) {
             chunk = responseText.substring(lastIndex)
           try {
             const data = JSON.parse(chunk)
+            const usage = (data.detail && data.detail.usage)
+              ? {
+                  completion_tokens: data.detail.usage.completion_tokens || null,
+                  prompt_tokens: data.detail.usage.prompt_tokens || null,
+                  total_tokens: data.detail.usage.total_tokens || null,
+                  estimated: data.detail.usage.estimated || null,
+                }
+              : undefined
             updateChat(
               +uuid,
               index,
@@ -280,10 +298,11 @@ async function onRegenerate(index: number) {
                 loading: true,
                 conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
                 requestOptions: { prompt: message, options: { ...options } },
+                usage,
               },
             )
 
-            if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+            if (openLongReply && data.detail && data.detail.choices.length > 0 && data.detail.choices[0].finish_reason === 'length') {
               options.parentMessageId = data.id
               lastText = data.text
               message = ''
@@ -428,7 +447,7 @@ function handleStop() {
 
 async function loadMoreMessage(event: any) {
   const chatIndex = chatStore.chat.findIndex(d => d.uuid === +uuid)
-  if (chatIndex <= -1)
+  if (chatIndex <= -1 || chatStore.chat[chatIndex].data.length <= 0)
     return
 
   const scrollPosition = event.target.scrollHeight - event.target.scrollTop
@@ -452,6 +471,16 @@ async function loadMoreMessage(event: any) {
 }
 
 const handleLoadMoreMessage = debounce(loadMoreMessage, 300)
+const handleSyncChat
+  = debounce(() => {
+    // 直接刷 极小概率不请求
+    chatStore.syncChat({ uuid: Number(uuid) } as Chat.History, undefined, () => {
+      firstLoading.value = false
+      scrollToBottom()
+      if (inputRef.value && !isMobile.value)
+        inputRef.value?.focus()
+    })
+  }, 200)
 
 async function handleScroll(event: any) {
   const scrollTop = event.target.scrollTop
@@ -505,15 +534,11 @@ const footerClass = computed(() => {
 
 onMounted(() => {
   firstLoading.value = true
-  debounce(() => {
-    // 直接刷 极小概率不请求
-    chatStore.syncChat({ uuid: Number(uuid) } as Chat.History, undefined, () => {
-      firstLoading.value = false
-      scrollToBottom()
-      if (inputRef.value && !isMobile.value)
-        inputRef.value?.focus()
-    })
-  }, 200)()
+  handleSyncChat()
+})
+
+watch(() => chatStore.active, (newVal, oldVal) => {
+  handleSyncChat()
 })
 
 onUnmounted(() => {
@@ -527,8 +552,9 @@ onUnmounted(() => {
     <HeaderComponent
       v-if="isMobile"
       :using-context="usingContext"
-      @export="handleExport"
-      @toggle-using-context="toggleUsingContext"
+      :show-prompt="showPrompt"
+      @export="handleExport" @toggle-using-context="toggleUsingContext"
+      @toggle-show-prompt="showPrompt = true"
     />
     <main class="flex-1 overflow-hidden">
       <div id="scrollRef" ref="scrollRef" class="h-full overflow-hidden overflow-y-auto" @scroll="handleScroll">
@@ -552,6 +578,7 @@ onUnmounted(() => {
                   :date-time="item.dateTime"
                   :text="item.text"
                   :inversion="item.inversion"
+                  :usage="item && item.usage || undefined"
                   :error="item.error"
                   :loading="item.loading"
                   @regenerate="onRegenerate(index)"
@@ -584,6 +611,11 @@ onUnmounted(() => {
               <SvgIcon icon="ri:download-2-line" />
             </span>
           </HoverButton>
+          <HoverButton v-if="!isMobile" @click="showPrompt = true">
+            <span class="text-xl text-[#4f555e] dark:text-white">
+              <IconPrompt class="w-[20px] m-auto" />
+            </span>
+          </HoverButton>
           <HoverButton v-if="!isMobile" @click="toggleUsingContext">
             <span class="text-xl" :class="{ 'text-[#4b9e5f]': usingContext, 'text-[#a8071a]': !usingContext }">
               <SvgIcon icon="ri:chat-history-line" />
@@ -594,6 +626,7 @@ onUnmounted(() => {
               <NInput
                 ref="inputRef"
                 v-model:value="prompt"
+                :disabled="!!authStore.session?.auth && !authStore.token"
                 type="textarea"
                 :placeholder="placeholder"
                 :autosize="{ minRows: 1, maxRows: isMobile ? 4 : 8 }"
@@ -614,5 +647,6 @@ onUnmounted(() => {
         </div>
       </div>
     </footer>
+    <Prompt v-if="showPrompt" v-model:roomId="uuid" v-model:visible="showPrompt" />
   </div>
 </template>

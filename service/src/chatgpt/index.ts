@@ -5,12 +5,22 @@ import { ChatGPTAPI, ChatGPTUnofficialProxyAPI } from 'chatgpt'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import httpsProxyAgent from 'https-proxy-agent'
 import fetch from 'node-fetch'
+import type { AuditConfig } from 'src/storage/model'
+import type { TextAuditService } from '../utils/textAudit'
+import { textAuditServices } from '../utils/textAudit'
 import { getCacheConfig, getOriginConfig } from '../storage/config'
 import { sendResponse } from '../utils'
 import { isNotEmptyString } from '../utils/is'
-import type { ApiModel, ChatContext, ChatGPTUnofficialProxyAPIOptions, ModelConfig } from '../types'
+import type { ChatContext, ChatGPTUnofficialProxyAPIOptions, ModelConfig } from '../types'
+import { getChatByMessageId } from '../storage/mongo'
 import type { RequestOptions } from './types'
 
+// import { Request, Response } from 'express'
+// eslint-disable-next-line import/order
+import https from 'https'
+// import { RequestOptions } from 'https'
+// eslint-disable-next-line import/order
+import fs from 'fs'
 const { HttpsProxyAgent } = httpsProxyAgent
 
 dotenv.config()
@@ -24,8 +34,8 @@ const ErrorCodeMessage: Record<string, string> = {
   500: '[OpenAI] 服务器繁忙，请稍后再试 | Internal Server Error',
 }
 
-let apiModel: ApiModel
 let api: ChatGPTAPI | ChatGPTUnofficialProxyAPI
+let auditService: TextAuditService
 
 export async function initApi() {
   // More Info: https://github.com/transitive-bullshit/chatgpt-api
@@ -34,15 +44,16 @@ export async function initApi() {
   if (!config.apiKey && !config.accessToken)
     throw new Error('Missing OPENAI_API_KEY or OPENAI_ACCESS_TOKEN environment variable')
 
-  if (isNotEmptyString(config.apiKey)) {
-    const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL
-    const OPENAI_API_MODEL = process.env.OPENAI_API_MODEL
-    const model = isNotEmptyString(OPENAI_API_MODEL) ? OPENAI_API_MODEL : 'gpt-3.5-turbo'
+  if (config.apiModel === 'ChatGPTAPI') {
+    const OPENAI_API_BASE_URL = config.apiBaseUrl
+    const model = config.chatModel
 
     const options: ChatGPTAPIOptions = {
       apiKey: config.apiKey,
       completionParams: { model },
       debug: !config.apiDisableDebug,
+      messageStore: undefined,
+      getMessageById,
     }
     // increase max token limit if use gpt-4
     if (model.toLowerCase().includes('gpt-4')) {
@@ -63,44 +74,124 @@ export async function initApi() {
     await setupProxy(options)
 
     api = new ChatGPTAPI({ ...options })
-    apiModel = 'ChatGPTAPI'
   }
   else {
-    const OPENAI_API_MODEL = process.env.OPENAI_API_MODEL
+    const model = config.chatModel
     const options: ChatGPTUnofficialProxyAPIOptions = {
       accessToken: config.accessToken,
+      apiReverseProxyUrl: isNotEmptyString(config.reverseProxy) ? config.reverseProxy : 'https://ai.fakeopen.com/api/conversation',
+      model,
       debug: !config.apiDisableDebug,
-    }
-
-    if (isNotEmptyString(OPENAI_API_MODEL))
-      options.model = OPENAI_API_MODEL
-
-    if (isNotEmptyString(config.reverseProxy)) {
-      options.apiReverseProxyUrl = isNotEmptyString(config.reverseProxy)
-        ? config.reverseProxy
-        : 'https://bypass.churchless.tech/api/conversation'
     }
 
     await setupProxy(options)
 
     api = new ChatGPTUnofficialProxyAPI({ ...options })
-    apiModel = 'ChatGPTUnofficialProxyAPI'
   }
 }
 
+async function draw(message: string) {
+  const config = (await getCacheConfig())
+  return new Promise<string>((resolve, reject) => {
+    try {
+      const dataReq = {
+        prompt: message,
+        n: 1,
+        size: '512x512',
+        response_format: 'b64_json',
+      }
+      const options: https.RequestOptions = {
+        hostname: 'api.openai.com',
+        port: 443,
+        path: '/v1/images/generations',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+      const request = https.request(options, (response) => {
+        let responseData = ''
+        response.on('data', (chunk) => {
+          responseData += chunk
+        })
+        response.on('end', () => {
+          try {
+            const jsonResponse = JSON.parse(responseData)
+            const datas = jsonResponse.data
+            // eslint-disable-next-line no-unreachable-loop
+            for (let i = 0; i < datas.length; i++) {
+              const data = datas[i]
+              const base64String = data.b64_json
+              const imageData = Buffer.from(base64String, 'base64')
+              const timestamp = Date.now()
+              const randomNum = Math.floor(Math.random() * 100000)
+              const randomStr = String(randomNum).padStart(5, '0')
+              const fileNmae = `${timestamp}${randomStr}.png`
+              const filePath = process.env.FILE_PATH
+              const filepathSave = `${filePath}/${fileNmae}`
+              fs.writeFile(filepathSave, imageData, (err) => {
+                if (err)
+                  console.error(err)
+                else
+                  console.log(`Image saved successfully!，path==${filepathSave}`)
+              })
+              const url = `${config.siteConfig.siteDomain}/sysfiles/${fileNmae}`
+              const imgMarkdown = `![我的图片](${url})`
+              console.log(`图片加载完成${imgMarkdown}`)
+              // console.log(url)
+              resolve(imgMarkdown)
+              return
+            }
+          }
+          catch (error01) {
+            // console.error("发生错误1" + error01)
+            resolve('发生未知错误')
+          }
+        })
+      })
+      request.on('error', (error) => {
+        console.error(`发生错误1${error}`)
+        reject(error)
+      })
+      request.write(JSON.stringify(dataReq))
+      request.end()
+    }
+    catch (error) {
+      console.error(`发生错误2${error}`)
+      reject(error)
+    }
+  })
+}
+
 async function chatReplyProcess(options: RequestOptions) {
-  const { message, lastContext, process, systemMessage } = options
+  const config = await getCacheConfig()
+  const model = config.chatModel
+  const { message, lastContext, process, systemMessage, temperature, top_p } = options
+
   try {
+    const startsWithSlash = message.startsWith('/')// 判断是否以斜杠开头
+    if (startsWithSlash) {
+      console.log(`开启画图：${message}`)
+      const imgMarkdown = await draw(message)
+      const dataRes = {
+        status: 'Fail',
+        message: imgMarkdown,
+        data: null,
+      }
+      return sendResponse({ type: 'Success', data: dataRes })
+    }
     const timeoutMs = (await getCacheConfig()).timeoutMs
     let options: SendMessageOptions = { timeoutMs }
 
-    if (apiModel === 'ChatGPTAPI') {
+    if (config.apiModel === 'ChatGPTAPI') {
       if (isNotEmptyString(systemMessage))
         options.systemMessage = systemMessage
+      options.completionParams = { model, temperature, top_p }
     }
 
     if (lastContext != null) {
-      if (apiModel === 'ChatGPTAPI')
+      if (config.apiModel === 'ChatGPTAPI')
         options.parentMessageId = lastContext.parentMessageId
       else
         options = { ...lastContext }
@@ -124,9 +215,36 @@ async function chatReplyProcess(options: RequestOptions) {
   }
 }
 
+export function initAuditService(audit: AuditConfig) {
+  if (!audit || !audit.options || !audit.options.apiKey || !audit.options.apiSecret)
+    return
+  const Service = textAuditServices[audit.provider]
+  auditService = new Service(audit.options)
+}
+
+async function containsSensitiveWords(audit: AuditConfig, text: string): Promise<boolean> {
+  if (audit.customizeEnabled && isNotEmptyString(audit.sensitiveWords)) {
+    const textLower = text.toLowerCase()
+    const notSafe = audit.sensitiveWords.split('\n').filter(d => textLower.includes(d.trim().toLowerCase())).length > 0
+    if (notSafe)
+      return true
+  }
+  if (audit.enabled) {
+    if (!auditService)
+      initAuditService(audit)
+    return await auditService.containsSensitiveWords(text)
+  }
+  return false
+}
+let cachedBalance: number | undefined
+let cacheExpiration = 0
+
 async function fetchBalance() {
-  // 计算起始日期和结束日期
   const now = new Date().getTime()
+  if (cachedBalance && cacheExpiration > now)
+    return Promise.resolve(cachedBalance.toFixed(3))
+
+  // 计算起始日期和结束日期
   const startDate = new Date(now - 90 * 24 * 60 * 60 * 1000)
   const endDate = new Date(now + 24 * 60 * 60 * 1000)
 
@@ -152,10 +270,23 @@ async function fetchBalance() {
     'Authorization': `Bearer ${OPENAI_API_KEY}`,
     'Content-Type': 'application/json',
   }
+  let socksAgent
+  let httpsAgent
+  if (isNotEmptyString(config.socksProxy)) {
+    socksAgent = new SocksProxyAgent({
+      hostname: config.socksProxy.split(':')[0],
+      port: parseInt(config.socksProxy.split(':')[1]),
+      userId: isNotEmptyString(config.socksAuth) ? config.socksAuth.split(':')[0] : undefined,
+      password: isNotEmptyString(config.socksAuth) ? config.socksAuth.split(':')[1] : undefined,
+    })
+  }
+  else if (isNotEmptyString(config.httpsProxy)) {
+    httpsAgent = new HttpsProxyAgent(config.httpsProxy)
+  }
 
   try {
     // 获取API限额
-    let response = await fetch(urlSubscription, { headers })
+    let response = await fetch(urlSubscription, { agent: socksAgent === undefined ? httpsAgent : socksAgent, headers })
     if (!response.ok) {
       console.error('您的账户已被封禁，请登录OpenAI进行查看。')
       return
@@ -164,16 +295,18 @@ async function fetchBalance() {
     const totalAmount = subscriptionData.hard_limit_usd
 
     // 获取已使用量
-    response = await fetch(urlUsage, { headers })
+    response = await fetch(urlUsage, { agent: socksAgent === undefined ? httpsAgent : socksAgent, headers })
     const usageData = await response.json()
     const totalUsage = usageData.total_usage / 100
 
     // 计算剩余额度
-    const balance = totalAmount - totalUsage
+    cachedBalance = totalAmount - totalUsage
+    cacheExpiration = now + 60 * 60 * 1000
 
-    return Promise.resolve(balance.toFixed(3))
+    return Promise.resolve(cachedBalance.toFixed(3))
   }
-  catch {
+  catch (error) {
+    global.console.error(error)
     return Promise.resolve('-')
   }
 }
@@ -210,8 +343,8 @@ async function setupProxy(options: ChatGPTAPIOptions | ChatGPTUnofficialProxyAPI
     }
   }
   else {
-    if (isNotEmptyString(config.httpsProxy) || isNotEmptyString(process.env.ALL_PROXY)) {
-      const httpsProxy = config.httpsProxy || process.env.ALL_PROXY
+    if (isNotEmptyString(config.httpsProxy)) {
+      const httpsProxy = config.httpsProxy
       if (httpsProxy) {
         const agent = new HttpsProxyAgent(httpsProxy)
         options.fetch = (url, options) => {
@@ -222,12 +355,35 @@ async function setupProxy(options: ChatGPTAPIOptions | ChatGPTUnofficialProxyAPI
   }
 }
 
-function currentModel(): ApiModel {
-  return apiModel
+async function getMessageById(id: string): Promise<ChatMessage | undefined> {
+  const isPrompt = id.startsWith('prompt_')
+  const chatInfo = await getChatByMessageId(isPrompt ? id.substring(7) : id)
+
+  if (chatInfo) {
+    if (isPrompt) { // prompt
+      return {
+        id,
+        conversationId: chatInfo.options.conversationId,
+        parentMessageId: chatInfo.options.parentMessageId,
+        role: 'user',
+        text: chatInfo.prompt,
+      }
+    }
+    else {
+      return { // completion
+        id,
+        conversationId: chatInfo.options.conversationId,
+        parentMessageId: `prompt_${id}`, // parent message is the prompt
+        role: 'assistant',
+        text: chatInfo.response,
+      }
+    }
+  }
+  else { return undefined }
 }
 
 initApi()
 
 export type { ChatContext, ChatMessage }
 
-export { chatReplyProcess, chatConfig, currentModel }
+export { chatReplyProcess, chatConfig, containsSensitiveWords }

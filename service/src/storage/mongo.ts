@@ -6,15 +6,18 @@ import type { ChatOptions, Config, UsageResponse } from './model'
 dotenv.config()
 
 const url = process.env.MONGODB_URL
-console.log("mongodbUrl=========="+url)
+const parsedUrl = new URL(url)
+const dbName = (parsedUrl.pathname && parsedUrl.pathname !== '/') ? parsedUrl.pathname.substring(1) : 'chatgpt'
 const client = new MongoClient(url)
-const chatCol = client.db('chatgpt').collection('chat')
-const roomCol = client.db('chatgpt').collection('chat_room')
-const userCol = client.db('chatgpt').collection('user')
-const configCol = client.db('chatgpt').collection('config')
-const usageCol = client.db('chatgpt').collection('chat_usage')
+const chatCol = client.db(dbName).collection('chat')
+const roomCol = client.db(dbName).collection('chat_room')
+const userCol = client.db(dbName).collection('user')
+const configCol = client.db(dbName).collection('config')
+const usageCol = client.db(dbName).collection('chat_usage')
+
 /**
  * 插入聊天信息
+ * @param uuid
  * @param text 内容 prompt or response
  * @param roomId
  * @param options
@@ -27,7 +30,11 @@ export async function insertChat(uuid: number, text: string, roomId: number, opt
 }
 
 export async function getChat(roomId: number, uuid: number) {
-  return await chatCol.findOne({ roomId, uuid })
+  return await chatCol.findOne({ roomId, uuid }) as ChatInfo
+}
+
+export async function getChatByMessageId(messageId: string) {
+  return await chatCol.findOne({ 'options.messageId': messageId }) as ChatInfo
 }
 
 export async function updateChat(chatId: string, response: string, messageId: string, usage: UsageResponse, previousResponse?: []) {
@@ -36,10 +43,10 @@ export async function updateChat(chatId: string, response: string, messageId: st
     $set: {
       'response': response,
       'options.messageId': messageId,
-      'options.prompt_tokens': usage.prompt_tokens,
-      'options.completion_tokens': usage.completion_tokens,
-      'options.total_tokens': usage.total_tokens,
-      'options.estimated': usage.estimated,
+      'options.prompt_tokens': usage?.prompt_tokens,
+      'options.completion_tokens': usage?.completion_tokens,
+      'options.total_tokens': usage?.total_tokens,
+      'options.estimated': usage?.estimated,
     },
   }
 
@@ -49,9 +56,7 @@ export async function updateChat(chatId: string, response: string, messageId: st
   await chatCol.updateOne(query, update)
 }
 
-
-
-export async function insertChatUsage(userId: string, roomId: number, chatId: ObjectId, messageId: string, usage: UsageResponse) {
+export async function insertChatUsage(userId: ObjectId, roomId: number, chatId: ObjectId, messageId: string, usage: UsageResponse) {
   const chatUsage = new ChatUsage(userId, roomId, chatId, messageId, usage)
   await usageCol.insertOne(chatUsage)
   return chatUsage
@@ -70,8 +75,7 @@ export async function renameChatRoom(userId: string, title: string, roomId: numb
       title,
     },
   }
-  const result = await roomCol.updateOne(query, update)
-  return result
+  return await roomCol.updateOne(query, update)
 }
 
 export async function deleteChatRoom(userId: string, roomId: number) {
@@ -80,11 +84,26 @@ export async function deleteChatRoom(userId: string, roomId: number) {
   return result
 }
 
+export async function updateRoomPrompt(userId: string, roomId: number, prompt: string) {
+  const query = { userId, roomId }
+  const update = {
+    $set: {
+      prompt,
+    },
+  }
+  const result = await roomCol.updateOne(query, update)
+  return result.modifiedCount > 0
+}
+
 export async function getChatRooms(userId: string) {
   const cursor = await roomCol.find({ userId, status: { $ne: Status.Deleted } })
   const rooms = []
   await cursor.forEach(doc => rooms.push(doc))
   return rooms
+}
+
+export async function getChatRoom(userId: string, roomId: number) {
+  return await roomCol.findOne({ userId, roomId, status: { $ne: Status.Deleted } }) as ChatRoom
 }
 
 export async function existsChatRoom(userId: string, roomId: number) {
@@ -144,7 +163,7 @@ export async function deleteChat(roomId: number, uuid: number, inversion: boolea
       },
     }
   }
-  chatCol.updateOne(query, update)
+  await chatCol.updateOne(query, update)
 }
 
 export async function createUser(email: string, password: string): Promise<UserInfo> {
@@ -158,9 +177,13 @@ export async function createUser(email: string, password: string): Promise<UserI
 }
 
 export async function updateUserInfo(userId: string, user: UserInfo) {
-  const result = userCol.updateOne({ _id: new ObjectId(userId) }
+  return userCol.updateOne({ _id: new ObjectId(userId) }
     , { $set: { name: user.name, description: user.description, avatar: user.avatar } })
-  return result
+}
+
+export async function updateUserPassword(userId: string, password: string) {
+  return userCol.updateOne({ _id: new ObjectId(userId) }
+    , { $set: { password, updateTime: new Date().toLocaleString() } })
 }
 
 export async function getUser(email: string): Promise<UserInfo> {
@@ -184,6 +207,8 @@ export async function getConfig(): Promise<Config> {
 export async function updateConfig(config: Config): Promise<Config> {
   const result = await configCol.replaceOne({ _id: config._id }, config, { upsert: true })
   if (result.modifiedCount > 0 || result.upsertedCount > 0)
+    return config
+  if (result.matchedCount > 0 && result.modifiedCount <= 0 && result.upsertedCount <= 0)
     return config
   return null
 }

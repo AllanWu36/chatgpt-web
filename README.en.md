@@ -7,7 +7,18 @@
 </br>
 
 ## Introduction
-> **This project is forked from [Chanzhaoyu/chatgpt-web](https://github.com/Chanzhaoyu/chatgpt-web). In addition to regularly merging this branch, some unique features have been added such as registration and login, setting API key on the front-end page.**
+> **This project is forked from [Chanzhaoyu/chatgpt-web](https://github.com/Chanzhaoyu/chatgpt-web), some unique features have been added:**
+
+[✓] Register & Login & Reset Password
+
+[✓] Sync chat history 
+
+[✓] Front-end page setting apikey
+
+[✓] Custom Sensitive Words
+
+[✓] Set unique prompts for each chat room
+
 </br>
 
 ## Screenshots
@@ -17,6 +28,7 @@
 ![cover](./docs/c1.png)
 ![cover2](./docs/c2.png)
 ![cover3](./docs/basesettings.jpg)
+![cover3](./docs/prompt_en.jpg)
 
 - [ChatGPT Web](#chatgpt-web)
 	- [Introduction](#introduction)
@@ -177,7 +189,8 @@ pnpm dev
 - `OPENAI_API_KEY` one of two
 - `OPENAI_ACCESS_TOKEN` one of two, `OPENAI_API_KEY` takes precedence when both are present
 - `OPENAI_API_BASE_URL` optional, available when `OPENAI_API_KEY` is set
-- `OPENAI_API_MODEL` optional, available when `OPENAI_API_KEY` is set
+- `OPENAI_API_MODEL`  `ChatGPTAPI` OR `ChatGPTUnofficialProxyAPI`
+- `OPENAI_CHAT_MODEL` gpt-4 gpt-3.5-turbo-0301
 - `API_REVERSE_PROXY` optional, available when `OPENAI_ACCESS_TOKEN` is set [Reference](#introduction)
 - `AUTH_SECRET_KEY` Access Password，optional
 - `TIMEOUT_MS` timeout, in milliseconds, optional
@@ -186,7 +199,6 @@ pnpm dev
 - `SOCKS_PROXY_USERNAME` optional, effective with SOCKS_PROXY_HOST and SOCKS_PROXY_PORT
 - `SOCKS_PROXY_PASSWORD` optional, effective with SOCKS_PROXY_HOST and SOCKS_PROXY_PORT
 - `HTTPS_PROXY` optional, support http，https, socks5
-- `ALL_PROXY` optional, support http，https, socks5
 
 ![docker](./docs/docker.png)
 
@@ -229,12 +241,14 @@ services:
       OPENAI_ACCESS_TOKEN: xxxxxx
       # api interface url, optional, available when OPENAI_API_KEY is set
       OPENAI_API_BASE_URL: xxxx
-      # api model, optional, available when OPENAI_API_KEY is set
+      # ChatGPTAPI 或者 ChatGPTUnofficialProxyAPI
       OPENAI_API_MODEL: xxxx
+      # gpt-4 gpt-3.5-turbo-0301
+      OPENAI_CHAT_MODEL: xxxx
       # reverse proxy, optional
       API_REVERSE_PROXY: xxx
       # timeout, in milliseconds, optional
-      TIMEOUT_MS: 60000
+      TIMEOUT_MS: 600000
       # socks proxy, optional, effective with SOCKS_PROXY_PORT
       SOCKS_PROXY_HOST: xxxx
       # socks proxy port, optional, effective with SOCKS_PROXY_HOST
@@ -267,6 +281,13 @@ services:
       SMTP_TSL: true
       SMTP_USERNAME: noreply@examile.com
       SMTP_PASSWORD: xxx
+      # Enable sensitive word review, because the response result is streaming, so there is currently no review.
+      AUDIT_ENABLED: false
+      # https://ai.baidu.com/ai-doc/ANTIPORN/Vk3h6xaga
+      AUDIT_PROVIDER: baidu
+      AUDIT_API_KEY: xxx
+      AUDIT_API_SECRET: xxx
+      AUDIT_TEXT_LABEL: xxx
     links:
       - database
 
@@ -289,7 +310,6 @@ volumes:
   mongodb: {}
 ```
 The `OPENAI_API_BASE_URL` is optional and only used when setting the `OPENAI_API_KEY`.
-The `OPENAI_API_MODEL` is optional and only used when setting the `OPENAI_API_KEY`.
 
 ### Deployment with Railway
 
@@ -305,14 +325,13 @@ The `OPENAI_API_MODEL` is optional and only used when setting the `OPENAI_API_KE
 | `OPENAI_API_KEY`       | Optional                                                          | Required for `OpenAI API`. `apiKey` can be obtained from [here](https://platform.openai.com/overview).           |
 | `OPENAI_ACCESS_TOKEN`  | Optional                                                          | Required for `Web API`. `accessToken` can be obtained from [here](https://chat.openai.com/api/auth/session).     |
 | `OPENAI_API_BASE_URL`  | Optional, only for `OpenAI API`                                   | API endpoint.                                                                                                    |
-| `OPENAI_API_MODEL`     | Optional, only for `OpenAI API`                                   | API model.                                                                                                       |
+| `OPENAI_API_MODEL`     | `ChatGPTAPI` OR `ChatGPTUnofficialProxyAPI`                                  | API model.                                                                                                       |
 | `API_REVERSE_PROXY`    | Optional, only for `Web API`                                      | Reverse proxy address for `Web API`. [Details](https://github.com/transitive-bullshit/chatgpt-api#reverse-proxy) |
 | `SOCKS_PROXY_HOST`     | Optional, effective with `SOCKS_PROXY_PORT`                       | Socks proxy.                                                                                                     |
 | `SOCKS_PROXY_PORT`     | Optional, effective with `SOCKS_PROXY_HOST`                       | Socks proxy port.                                                                                                |
 | `SOCKS_PROXY_USERNAME` | Optional, effective with `SOCKS_PROXY_HOST` & `SOCKS_PROXY_PORT`  | Socks proxy username.                                                                                            |
 | `SOCKS_PROXY_PASSWORD` | Optional, effective with `SOCKS_PROXY_HOST` & `SOCKS_PROXY_PORT`  | Socks proxy password.                                                                                            |
 | `HTTPS_PROXY`          | Optional                                                          | HTTPS Proxy.                                                                                                     |
-| `ALL_PROXY`            | Optional                                                          | ALL Proxy.                                                                                                       |
 
 > Note: Changing environment variables in Railway will cause re-deployment.
 

@@ -1,7 +1,7 @@
 import type { AxiosProgressEvent, GenericAbortSignal } from 'axios'
 import { get, post } from '@/utils/request'
-import type { ConfigState, MailConfig, SiteConfig } from '@/components/common/Setting/model'
-import { useSettingStore } from '@/store'
+import type { AuditConfig, ConfigState, MailConfig, SiteConfig } from '@/components/common/Setting/model'
+import { useAuthStore, useSettingStore } from '@/store'
 
 export function fetchChatAPI<T = any>(
   prompt: string,
@@ -32,17 +32,28 @@ export function fetchChatAPIProcess<T = any>(
     onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void },
 ) {
   const settingStore = useSettingStore()
+  const authStore = useAuthStore()
+
+  let data: Record<string, any> = {
+    roomId: params.roomId,
+    uuid: params.uuid,
+    regenerate: params.regenerate || false,
+    prompt: params.prompt,
+    options: params.options,
+  }
+
+  if (authStore.isChatGPTAPI) {
+    data = {
+      ...data,
+      systemMessage: settingStore.systemMessage,
+      temperature: settingStore.temperature,
+      top_p: settingStore.top_p,
+    }
+  }
 
   return post<T>({
     url: '/chat-process',
-    data: {
-      roomId: params.roomId,
-      uuid: params.uuid,
-      regenerate: params.regenerate || false,
-      prompt: params.prompt,
-      options: params.options,
-      systemMessage: settingStore.systemMessage,
-    },
+    data,
     signal: params.signal,
     onDownloadProgress: params.onDownloadProgress,
   })
@@ -72,6 +83,20 @@ export function fetchLogin<T = any>(username: string, password: string) {
   return post<T>({
     url: '/user-web-login',
     data: { username, password },
+  })
+}
+
+export function fetchSendResetMail<T = any>(username: string) {
+  return post<T>({
+    url: '/user-send-reset-mail',
+    data: { username },
+  })
+}
+
+export function fetchResetPassword<T = any>(username: string, password: string, sign: string) {
+  return post<T>({
+    url: '/user-reset-password',
+    data: { username, password, sign },
   })
 }
 
@@ -106,6 +131,13 @@ export function fetchRenameChatRoom<T = any>(title: string, roomId: number) {
   return post<T>({
     url: '/room-rename',
     data: { title, roomId },
+  })
+}
+
+export function fetchUpdateChatRoomPrompt<T = any>(prompt: string, roomId: number) {
+  return post<T>({
+    url: '/room-prompt',
+    data: { prompt, roomId },
   })
 }
 
@@ -154,6 +186,20 @@ export function fetchTestMail<T = any>(mail: MailConfig) {
   return post<T>({
     url: '/mail-test',
     data: mail,
+  })
+}
+
+export function fetchUpdateAudit<T = any>(audit: AuditConfig) {
+  return post<T>({
+    url: '/setting-audit',
+    data: audit,
+  })
+}
+
+export function fetchTestAudit<T = any>(text: string, audit: AuditConfig) {
+  return post<T>({
+    url: '/audit-test',
+    data: { audit, text },
   })
 }
 

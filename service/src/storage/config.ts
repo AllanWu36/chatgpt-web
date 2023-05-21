@@ -1,7 +1,8 @@
 import { ObjectId } from 'mongodb'
 import * as dotenv from 'dotenv'
-import { isNotEmptyString } from '../utils/is'
-import { Config, MailConfig, SiteConfig } from './model'
+import type { TextAuditServiceProvider } from 'src/utils/textAudit'
+import { isNotEmptyString, isTextAuditServiceProvider } from '../utils/is'
+import { AuditConfig, Config, MailConfig, SiteConfig, TextAudioType } from './model'
 import { getConfig } from './mongo'
 
 dotenv.config()
@@ -31,7 +32,8 @@ export async function getOriginConfig() {
       process.env.OPENAI_API_DISABLE_DEBUG === 'true',
       process.env.OPENAI_ACCESS_TOKEN,
       process.env.OPENAI_API_BASE_URL,
-      process.env.OPENAI_API_MODEL || 'gpt-3.5-turbo',
+      process.env.OPENAI_API_MODEL || 'ChatGPTAPI',
+      process.env.OPENAI_CHAT_MODEL || 'gpt-3.5-turbo',
       process.env.API_REVERSE_PROXY,
       (process.env.SOCKS_PROXY_HOST && process.env.SOCKS_PROXY_PORT)
         ? (`${process.env.SOCKS_PROXY_HOST}:${process.env.SOCKS_PROXY_PORT}`)
@@ -69,7 +71,48 @@ export async function getOriginConfig() {
     if (config.siteConfig.registerReview === undefined)
       config.siteConfig.registerReview = process.env.REGISTER_REVIEW === 'true'
   }
+  if (!isNotEmptyString(config.chatModel))
+    config.chatModel = 'gpt-3.5-turbo'
+  if (config.apiModel !== 'ChatGPTAPI' && config.apiModel !== 'ChatGPTUnofficialProxyAPI') {
+    if (isNotEmptyString(config.accessToken))
+      config.apiModel = 'ChatGPTUnofficialProxyAPI'
+    else
+      config.apiModel = 'ChatGPTAPI'
+  }
+
+  if (config.auditConfig === undefined) {
+    config.auditConfig = new AuditConfig(
+      process.env.AUDIT_ENABLED === 'true',
+      isTextAuditServiceProvider(process.env.AUDIT_PROVIDER)
+        ? process.env.AUDIT_PROVIDER as TextAuditServiceProvider
+        : 'baidu',
+      {
+        apiKey: process.env.AUDIT_API_KEY,
+        apiSecret: process.env.AUDIT_API_SECRET,
+        label: process.env.AUDIT_TEXT_LABEL,
+      },
+      getTextAuditServiceOptionFromString(process.env.AUDIT_TEXT_TYPE),
+      false,
+      '',
+    )
+  }
   return config
+}
+
+function getTextAuditServiceOptionFromString(value: string): TextAudioType {
+  if (value === undefined)
+    return TextAudioType.None
+
+  switch (value.toLowerCase()) {
+    case 'request':
+      return TextAudioType.Request
+    case 'response':
+      return TextAudioType.Response
+    case 'all':
+      return TextAudioType.All
+    default:
+      return TextAudioType.None
+  }
 }
 
 export function clearConfigCache() {

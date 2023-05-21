@@ -7,6 +7,8 @@ export interface RequestProps {
   prompt: string
   options?: ChatContext
   systemMessage: string
+  temperature?: number
+  top_p?: number
 }
 
 export interface ChatContext {
@@ -25,6 +27,7 @@ export interface ChatGPTUnofficialProxyAPIOptions {
 
 export interface ModelConfig {
   apiModel?: ApiModel
+  chatModel?: string
   reverseProxy?: string
   timeoutMs?: number
   socksProxy?: string
