@@ -93,12 +93,12 @@ export function fetchSendResetMail<T = any>(username: string) {
   })
 }
 
-export function fetchResetPassword<T = any>(username: string, password: string, sign: string) {
-  return post<T>({
-    url: '/user-reset-password',
-    data: { username, password, sign },
-  })
-}
+// export function fetchResetPassword<T = any>(username: string, password: string, sign: string) {
+//   return post<T>({
+//     url: '/user-reset-password',
+//     data: { username, password, sign },
+//   })
+// }
 
 export function fetchRegister<T = any>(username: string, password: string) {
   return post<T>({
