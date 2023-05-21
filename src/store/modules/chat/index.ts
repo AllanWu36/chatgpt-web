@@ -94,6 +94,7 @@ export const useChatStore = defineStore('chat-store', {
       this.recordState()
     },
 
+    // 新建一个聊天室
     async addHistory(history: Chat.History, chatData: Chat.Chat[] = []) {
       await fetchCreateChatRoom(history.title, history.uuid)
       this.history.unshift(history)

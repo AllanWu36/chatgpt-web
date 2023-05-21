@@ -119,7 +119,7 @@ router.post('/room-delete', auth, async (req, res) => {
   }
 })
 
-router.get('/chat-hisroty', auth, async (req, res) => {
+router.get('/chat-history', auth, async (req, res) => {
   try {
     const userId = req.headers.userId as string
     const roomId = +req.query.roomId
