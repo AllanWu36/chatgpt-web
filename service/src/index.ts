@@ -5,10 +5,10 @@ import * as dotenv from 'dotenv'
 import { ObjectId } from 'mongodb'
 import type { RequestProps } from './types'
 import type { ChatContext, ChatMessage } from './chatgpt'
-import { chatConfig, chatReplyProcess, containsSensitiveWords, initApi, initAuditService } from './chatgpt'
+import { chatConfig, chatReplyProcess, containsSensitiveWords, initAuditService } from './chatgpt'
 import { auth } from './middleware/auth'
 import { clearConfigCache, getCacheConfig, getOriginConfig } from './storage/config'
-import type { AuditConfig, ChatInfo, ChatOptions, Config, MailConfig, SiteConfig, UsageResponse, UserInfo } from './storage/model'
+import type { AuditConfig, CHATMODEL, ChatInfo, ChatOptions, Config, MailConfig, SiteConfig, UsageResponse, UserInfo } from './storage/model'
 import { Status } from './storage/model'
 import {
   clearChat,
@@ -24,14 +24,19 @@ import {
   getChats,
   getUser,
   getUserById,
+  getUserStatisticsByDay,
+  getUsers,
   insertChat,
   insertChatUsage,
   renameChatRoom,
   updateChat,
   updateConfig,
   updateRoomPrompt,
+  updateRoomUsingContext,
+  updateUserChatModel,
   updateUserInfo,
   updateUserPassword,
+  updateUserStatus,
   verifyUser,
   updateUserPassword,
   updateUserToken,
@@ -71,6 +76,7 @@ router.get('/chatrooms', auth, async (req, res) => {
         title: r.title,
         isEdit: false,
         prompt: r.prompt,
+        usingContext: r.usingContext === undefined ? true : r.usingContext,
       })
     })
     res.send({ status: 'Success', message: null, data: result })
@@ -112,6 +118,22 @@ router.post('/room-prompt', auth, async (req, res) => {
     const userId = req.headers.userId as string
     const { prompt, roomId } = req.body as { prompt: string; roomId: number }
     const success = await updateRoomPrompt(userId, roomId, prompt)
+    if (success)
+      res.send({ status: 'Success', message: 'Saved successfully', data: null })
+    else
+      res.send({ status: 'Fail', message: 'Saved Failed', data: null })
+  }
+  catch (error) {
+    console.error(error)
+    res.send({ status: 'Fail', message: 'Rename error', data: null })
+  }
+})
+
+router.post('/room-context', auth, async (req, res) => {
+  try {
+    const userId = req.headers.userId as string
+    const { using, roomId } = req.body as { using: boolean; roomId: number }
+    const success = await updateRoomUsingContext(userId, roomId, using)
     if (success)
       res.send({ status: 'Success', message: 'Saved successfully', data: null })
     else
@@ -184,6 +206,7 @@ router.get('/chat-history', auth, async (req, res) => {
           inversion: false,
           error: false,
           loading: false,
+          responseCount: (c.previousResponse?.length ?? 0) + 1,
           conversationOptions: {
             parentMessageId: c.options.messageId,
             conversationId: c.options.conversationId,
@@ -202,6 +225,66 @@ router.get('/chat-history', auth, async (req, res) => {
     })
 
     res.send({ status: 'Success', message: null, data: result })
+  }
+  catch (error) {
+    console.error(error)
+    res.send({ status: 'Fail', message: 'Load error', data: null })
+  }
+})
+
+router.get('/chat-response-history', auth, async (req, res) => {
+  try {
+    const userId = req.headers.userId as string
+    const roomId = +req.query.roomId
+    const uuid = +req.query.uuid
+    const index = +req.query.index
+    if (!roomId || !await existsChatRoom(userId, roomId)) {
+      res.send({ status: 'Success', message: null, data: [] })
+      // res.send({ status: 'Fail', message: 'Unknow room', data: null })
+      return
+    }
+    const chat = await getChat(roomId, uuid)
+    if (chat.previousResponse === undefined || chat.previousResponse.length < index) {
+      res.send({ status: 'Fail', message: 'Error', data: [] })
+      return
+    }
+    const response = index >= chat.previousResponse.length
+      ? chat
+      : chat.previousResponse[index]
+    const usage = response.options.completion_tokens
+      ? {
+          completion_tokens: response.options.completion_tokens || null,
+          prompt_tokens: response.options.prompt_tokens || null,
+          total_tokens: response.options.total_tokens || null,
+          estimated: response.options.estimated || null,
+        }
+      : undefined
+    res.send({
+      status: 'Success',
+      message: null,
+      data: {
+        uuid: chat.uuid,
+        dateTime: new Date(chat.dateTime).toLocaleString(),
+        text: response.response,
+        inversion: false,
+        error: false,
+        loading: false,
+        responseCount: (chat.previousResponse?.length ?? 0) + 1,
+        conversationOptions: {
+          parentMessageId: response.options.messageId,
+          conversationId: response.options.conversationId,
+        },
+        requestOptions: {
+          prompt: chat.prompt,
+          parentMessageId: response.options.parentMessageId,
+          options: {
+            parentMessageId: response.options.messageId,
+            conversationId: response.options.conversationId,
+          },
+        },
+        usage,
+      },
+    })
   }
   catch (error) {
     console.error(error)
@@ -301,17 +384,18 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
   let { roomId, uuid, regenerate, prompt, options = {}, systemMessage, temperature, top_p } = req.body as RequestProps
   const userId = req.headers.userId as string
   const room = await getChatRoom(userId, roomId)
+  if (room == null)
+    global.console.error(`Unable to get chat room \t ${userId}\t ${roomId}`)
   if (room != null && isNotEmptyString(room.prompt))
     systemMessage = room.prompt
-
   let lastResponse
   let result
   let message: ChatInfo
   try {
     const config = await getCacheConfig()
+    const userId = req.headers.userId.toString()
+    const user = await getUserById(userId)
     if (config.auditConfig.enabled || config.auditConfig.customizeEnabled) {
-      const userId = req.headers.userId.toString()
-      const user = await getUserById(userId)
       if (user.email.toLowerCase() !== process.env.ROOT_USER && await containsSensitiveWords(config.auditConfig, prompt)) {
         res.send({ status: 'Fail', message: '含有敏感词 | Contains sensitive words', data: null })
         return
@@ -348,6 +432,7 @@ router.post('/chat-process', [auth, limiter], async (req, res) => {
       systemMessage,
       temperature,
       top_p,
+      chatModel: user.config.chatModel,
     })
     // return the whole response including usage
     res.write(`\n${JSON.stringify(result.data)}`)
@@ -509,6 +594,7 @@ router.post('/user-web-login', async (req, res) => {
       description: user.description,
       userId: user._id,
       root: username.toLowerCase() === process.env.ROOT_USER,
+      config: user.config,
     }, config.siteConfig.loginSalt.trim())
     await updateUserToken(user._id,token)
     tokenMap.set(user._id.toString(),token)
@@ -572,6 +658,45 @@ router.post('/user-info', auth, async (req, res) => {
   }
 })
 
+router.post('/user-chat-model', auth, async (req, res) => {
+  try {
+    const { chatModel } = req.body as { chatModel: CHATMODEL }
+    const userId = req.headers.userId.toString()
+
+    const user = await getUserById(userId)
+    if (user == null || user.status !== Status.Normal)
+      throw new Error('用户不存在 | User does not exist.')
+    await updateUserChatModel(userId, chatModel)
+    res.send({ status: 'Success', message: '更新成功 | Update successfully' })
+  }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
+router.get('/users', rootAuth, async (req, res) => {
+  try {
+    const page = +req.query.page
+    const size = +req.query.size
+    const data = await getUsers(page, size)
+    res.send({ status: 'Success', message: '获取成功 | Get successfully', data })
+  }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
+router.post('/user-status', rootAuth, async (req, res) => {
+  try {
+    const { userId, status } = req.body as { userId: string; status: Status }
+    await updateUserStatus(userId, status)
+    res.send({ status: 'Success', message: '更新成功 | Update successfully' })
+  }
+  catch (error) {
+    res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
 router.post('/verify', async (req, res) => {
   try {
     const { token } = req.body as { token: string }
@@ -624,7 +749,7 @@ router.post('/verifyadmin', async (req, res) => {
 
 router.post('/setting-base', rootAuth, async (req, res) => {
   try {
-    const { apiKey, apiModel, chatModel, apiBaseUrl, accessToken, timeoutMs, reverseProxy, socksProxy, socksAuth, httpsProxy } = req.body as Config
+    const { apiKey, apiModel, apiBaseUrl, accessToken, timeoutMs, reverseProxy, socksProxy, socksAuth, httpsProxy } = req.body as Config
 
     if (apiModel === 'ChatGPTAPI' && !isNotEmptyString(apiKey))
       throw new Error('Missing OPENAI_API_KEY environment variable.')
@@ -634,7 +759,6 @@ router.post('/setting-base', rootAuth, async (req, res) => {
     const thisConfig = await getOriginConfig()
     thisConfig.apiKey = apiKey
     thisConfig.apiModel = apiModel
-    thisConfig.chatModel = chatModel
     thisConfig.apiBaseUrl = apiBaseUrl
     thisConfig.accessToken = accessToken
     thisConfig.reverseProxy = reverseProxy
@@ -644,7 +768,6 @@ router.post('/setting-base', rootAuth, async (req, res) => {
     thisConfig.httpsProxy = httpsProxy
     await updateConfig(thisConfig)
     clearConfigCache()
-    initApi()
     const response = await chatConfig()
     res.send({ status: 'Success', message: '操作成功 | Successfully', data: response.data })
   }
@@ -726,6 +849,19 @@ router.post('/audit-test', rootAuth, async (req, res) => {
   }
   catch (error) {
     res.send({ status: 'Fail', message: error.message, data: null })
+  }
+})
+
+router.post('/statistics/by-day', auth, async (req, res) => {
+  try {
+    const userId = req.headers.userId
+    const { start, end } = req.body as { start: number; end: number }
+
+    const data = await getUserStatisticsByDay(new ObjectId(userId as string), start, end)
+    res.send({ status: 'Success', message: '', data })
+  }
+  catch (error) {
+    res.send(error)
   }
 })
 
