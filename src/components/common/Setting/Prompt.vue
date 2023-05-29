@@ -38,7 +38,7 @@ async function handleSaveChatRoomPrompt() {
 
   testing.value = true
   try {
-    const { message } = await fetchUpdateChatRoomPrompt(currentChatHistory.value.prompt ?? '', +props.roomId) as { status: string; message: string }
+    const { message } = await fetchUpdateChatRoomPrompt(currentChatHistory.value.prompt ?? '', +props.roomId) as unknown as { status: string; message: string }
     ms.success(message)
     show.value = false
   }

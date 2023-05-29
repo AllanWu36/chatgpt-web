@@ -46,7 +46,7 @@ async function updateAuditInfo() {
 async function testAudit() {
   testing.value = true
   try {
-    const { message } = await fetchTestAudit(testText.value as string, config.value as AuditConfig) as { status: string; message: string }
+    const { message } = await fetchTestAudit(testText.value as string, config.value as AuditConfig) as unknown as { status: string; message: string }
     ms.success(message)
   }
   catch (error: any) {

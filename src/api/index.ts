@@ -100,12 +100,12 @@ export function fetchSendResetMail<T = any>(username: string) {
   })
 }
 
-// export function fetchResetPassword<T = any>(username: string, password: string, sign: string) {
-//   return post<T>({
-//     url: '/user-reset-password',
-//     data: { username, password, sign },
-//   })
-// }
+export function fetchResetPassword<T = any>(username: string, password: string, sign: string) {
+  return post<T>({
+    url: '/user-reset-password',
+    data: { username, password, sign },
+  })
+}
 
 export function fetchRegister<T = any>(username: string, password: string) {
   return post<T>({
@@ -118,27 +118,6 @@ export function fetchUpdateUserInfo<T = any>(nickname: string, avatar: string, d
   return post<T>({
     url: '/user-info',
     data: { nickname, avatar, description },
-  })
-}
-
-export function fetchUpdateUserChatModel<T = any>(chatModel: CHATMODEL) {
-  return post<T>({
-    url: '/user-chat-model',
-    data: { chatModel },
-  })
-}
-
-export function fetchGetUsers<T = any>(page: number, size: number) {
-  return get<T>({
-    url: '/users',
-    data: { page, size },
-  })
-}
-
-export function fetchUpdateUserStatus<T = any>(userId: string, status: Status) {
-  return post<T>({
-    url: '/user-status',
-    data: { userId, status },
   })
 }
 

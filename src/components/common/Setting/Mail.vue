@@ -40,7 +40,7 @@ async function updateMailInfo() {
 async function testMail() {
   testing.value = true
   try {
-    const { message } = await fetchTestMail(config.value as MailConfig) as { status: string; message: string }
+    const { message } = await fetchTestMail(config.value as MailConfig) as unknown as { status: string; message: string }
     ms.success(message)
   }
   catch (error: any) {
