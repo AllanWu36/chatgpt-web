@@ -36,6 +36,9 @@ function http<T = any>(
 
   const failHandler = (error: Response<Error>) => {
     afterRequest?.()
+    if (error?.response?.status === 429 || error?.response?.status === 403)
+      throw new Error(error?.response?.data?.msg || 'Too Many Requests')
+
     throw new Error(error?.message || 'Error')
   }
 
