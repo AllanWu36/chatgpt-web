@@ -554,23 +554,19 @@ const renderOption = (option: { label: string }) => {
 }
 
 const chatModelOptions = [
-  'gpt-3.5-turbo',
-  'gpt-3.5-turbo-0301',
-  'gpt-4',
-  'gpt-4-0314',
-  'gpt-4-32k',
-  'gpt-4-32k-0314',
-  'text-davinci-002-render-sha-mobile',
-  'gpt-4-mobile',
-  'gpt-4-browsing',
+  'fast-gpt-3.5',
+  'fast-gpt-4',
 ].map((model: string) => {
-  let label = model
-  if (model === 'text-davinci-002-render-sha-mobile')
-    label = 'gpt-3.5-mobile'
+  const label = model
+  let v = ''
+  if (model === 'fast-gpt-3.5')
+    v = 'gpt-3.5-turbo-16k'
+  else if (model === 'fast-gpt-4')
+    v = 'gpt-4'
   return {
     label,
     key: model,
-    value: model,
+    value: v,
   }
 })
 

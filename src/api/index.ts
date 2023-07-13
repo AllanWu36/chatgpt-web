@@ -1,7 +1,7 @@
 import type { AxiosProgressEvent, GenericAbortSignal } from 'axios'
 import { get, post } from '@/utils/request'
 import type { AuditConfig, CHATMODEL, ConfigState, MailConfig, SiteConfig, Status } from '@/components/common/Setting/model'
-import { useAuthStore, useSettingStore } from '@/store'
+import { useAuthStore, useSettingStore, useUserStore } from '@/store'
 
 export function fetchChatAPI<T = any>(
   prompt: string,
@@ -33,6 +33,7 @@ export function fetchChatAPIProcess<T = any>(
 ) {
   const settingStore = useSettingStore()
   const authStore = useAuthStore()
+  const userStore = useUserStore()
 
   let data: Record<string, any> = {
     roomId: params.roomId,
@@ -48,6 +49,7 @@ export function fetchChatAPIProcess<T = any>(
       systemMessage: settingStore.systemMessage,
       temperature: settingStore.temperature,
       top_p: settingStore.top_p,
+      module: userStore.userInfo.config.chatModel,
     }
   }
 
