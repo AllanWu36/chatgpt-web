@@ -137,6 +137,12 @@ export function fetchGetUsers<T = any>(page: number, size: number) {
   })
 }
 
+export function fetchUserInfo<T = any>() {
+  return get<T>({
+    url: '/user/chatUser-info',
+  })
+}
+
 export function fetchUpdateUserStatus<T = any>(userId: string, status: Status) {
   return post<T>({
     url: '/user-status',

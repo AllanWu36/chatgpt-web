@@ -27,7 +27,7 @@ export default {
     failed: '操作失败',
     register: '注册',
     login: '登录',
-    resetpwd :'重置密码',
+    resetpwd: '重置密码',
     notLoggedIn: '登录 / 注册',
     logOut: '退出登录',
     unauthorizedTips: '未经授权，请先进行验证。',
@@ -129,6 +129,14 @@ export default {
     auditCustomizeWords: '敏感词',
     accessTokenExpiredTime: '过期时间',
     userConfig: '用户管理',
+    userInfo: '用户信息',
+    userVipType: 'VIP类型',
+    userBalance: '用户余额',
+    userExpireTime: '会员过期时间',
+    userToken: '剩余Token',
+    userSubscribedRecord: '订阅记录',
+    userAutoRenew: '自动续费',
+
   },
   store: {
     siderButton: '提示词商店',

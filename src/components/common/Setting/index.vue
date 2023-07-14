@@ -2,8 +2,7 @@
 import { computed, ref } from 'vue'
 import { NModal, NTabPane, NTabs } from 'naive-ui'
 import General from './General.vue'
-import Advanced from './Advanced.vue'
-import Statistics from './Statistics.vue'
+import Info from './Info.vue'
 import About from './About.vue'
 import Site from './Site.vue'
 import Mail from './Mail.vue'
@@ -54,7 +53,15 @@ const show = computed({
             <General />
           </div>
         </NTabPane>
-        <NTabPane v-if="isChatGPTAPI" name="Advanced" tab="Advanced">
+        <NTabPane name="Info" tab="Info">
+          <template #tab>
+            <SvgIcon class="text-lg" icon="ri:information-line" />
+            <span class="ml-2">{{ $t('setting.userInfo') }}</span>
+          </template>
+          <div class="min-h-[100px]">
+            <Info />
+          </div>
+          <!-- <NTabPane v-if="isChatGPTAPI" name="Advanced" tab="Advanced">
           <template #tab>
             <SvgIcon class="text-lg" icon="ri:equalizer-line" />
             <span class="ml-2">{{ $t('setting.advanced') }}</span>
@@ -62,8 +69,8 @@ const show = computed({
           <div class="min-h-[100px]">
             <Advanced />
           </div>
-        </NTabPane>
-        <NTabPane name="Statistics" tab="Statistics">
+        </NTabPane> -->
+          <!-- <NTabPane name="Statistics" tab="Statistics">
           <template #tab>
             <SvgIcon class="text-lg" icon="ri:bar-chart-box-line" />
             <span class="ml-2">{{ $t('setting.statistics') }}</span>
@@ -71,42 +78,43 @@ const show = computed({
           <div class="min-h-[100px]">
             <Statistics />
           </div>
-        </NTabPane>
-        <NTabPane v-if="userStore.userInfo.root" name="Config" tab="Config">
-          <template #tab>
-            <SvgIcon class="text-lg" icon="ri:list-settings-line" />
-            <span class="ml-2">{{ $t('setting.config') }}</span>
-          </template>
-          <About />
-        </NTabPane>
-        <NTabPane v-if="userStore.userInfo.root" name="SiteConfig" tab="SiteConfig">
-          <template #tab>
-            <SvgIcon class="text-lg" icon="ri:settings-line" />
-            <span class="ml-2">{{ $t('setting.siteConfig') }}</span>
-          </template>
-          <Site />
-        </NTabPane>
-        <NTabPane v-if="userStore.userInfo.root" name="MailConfig" tab="MailConfig">
-          <template #tab>
-            <SvgIcon class="text-lg" icon="ri:mail-line" />
-            <span class="ml-2">{{ $t('setting.mailConfig') }}</span>
-          </template>
-          <Mail />
-        </NTabPane>
-        <NTabPane v-if="userStore.userInfo.root" name="AuditConfig" tab="AuditConfig">
-          <template #tab>
-            <SvgIcon class="text-lg" icon="ri:settings-line" />
-            <span class="ml-2">{{ $t('setting.auditConfig') }}</span>
-          </template>
-          <Audit />
-        </NTabPane>
-        <NTabPane v-if="userStore.userInfo.root" name="UserConfig" tab="UserConfig">
-          <template #tab>
-            <SvgIcon class="text-lg" icon="ri-user-5-line" />
-            <span class="ml-2">{{ $t('setting.userConfig') }}</span>
-          </template>
-          <User />
-        </NTabPane>
+        </NTabPane> -->
+          <NTabPane v-if="userStore.userInfo.root" name="Config" tab="Config">
+            <template #tab>
+              <SvgIcon class="text-lg" icon="ri:list-settings-line" />
+              <span class="ml-2">{{ $t('setting.config') }}</span>
+            </template>
+            <About />
+          </NTabPane>
+          <NTabPane v-if="userStore.userInfo.root" name="SiteConfig" tab="SiteConfig">
+            <template #tab>
+              <SvgIcon class="text-lg" icon="ri:settings-line" />
+              <span class="ml-2">{{ $t('setting.siteConfig') }}</span>
+            </template>
+            <Site />
+          </NTabPane>
+          <NTabPane v-if="userStore.userInfo.root" name="MailConfig" tab="MailConfig">
+            <template #tab>
+              <SvgIcon class="text-lg" icon="ri:mail-line" />
+              <span class="ml-2">{{ $t('setting.mailConfig') }}</span>
+            </template>
+            <Mail />
+          </NTabPane>
+          <NTabPane v-if="userStore.userInfo.root" name="AuditConfig" tab="AuditConfig">
+            <template #tab>
+              <SvgIcon class="text-lg" icon="ri:settings-line" />
+              <span class="ml-2">{{ $t('setting.auditConfig') }}</span>
+            </template>
+            <Audit />
+          </NTabPane>
+          <NTabPane v-if="userStore.userInfo.root" name="UserConfig" tab="UserConfig">
+            <template #tab>
+              <SvgIcon class="text-lg" icon="ri-user-5-line" />
+              <span class="ml-2">{{ $t('setting.userConfig') }}</span>
+            </template>
+            <User />
+          </NTabPane>
+        </ntabpane>
       </NTabs>
     </div>
   </NModal>
