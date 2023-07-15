@@ -1,10 +1,8 @@
 <script setup lang='ts'>
 import { onMounted, ref } from 'vue'
 import { NSpin, useMessage } from 'naive-ui'
-import type { AuditConfig, TextAuditServiceProvider } from './model'
+import type { TextAuditServiceProvider } from './model'
 import { fetchUserInfo } from '@/api'
-import { t } from '@/locales'
-
 const ms = useMessage()
 
 const loading = ref(false)
@@ -16,42 +14,29 @@ const serviceOptions: { label: string; key: TextAuditServiceProvider; value: Tex
   { label: '百度云', key: 'baidu', value: 'baidu' },
 ]
 
-const userInfo = ref()
+const userInfo = ref({ vip: 0, balance: 0, expire_time: 0, total_token: 0 })
 
 async function handleUserInfo() {
   try {
     loading.value = true
+
+    // 第一种写法
+    // const vData = (await fetchUserInfo()).data
+    // userInfo.value.vip = vData.vip
+    // userInfo.value.balance = vData.balance
+    // userInfo.value.expire_time = vData.expire_time
+    // userInfo.value.total_token = vData.total_token
+
+    // 第二种写法
     const data = await fetchUserInfo()
-    userInfo.value = data
+    userInfo.value = { ...data.data }
+  }
+  catch (error) {
+    // 根据需要进行错误处理，例如显示错误消息给用户
   }
   finally {
     loading.value = false
   }
-}
-
-async function updateAuditInfo() {
-  saving.value = true
-  try {
-    const { data } = await fetchUpdateAudit(config.value as AuditConfig)
-    config.value = data
-    ms.success(t('common.success'))
-  }
-  catch (error: any) {
-    ms.error(error.message)
-  }
-  saving.value = false
-}
-
-async function testAudit() {
-  testing.value = true
-  try {
-    const { message } = await fetchTestAudit(testText.value as string, config.value as AuditConfig) as unknown as { status: string; message: string }
-    ms.success(message)
-  }
-  catch (error: any) {
-    ms.error(error.message)
-  }
-  testing.value = false
 }
 
 onMounted(() => {
@@ -66,28 +51,28 @@ onMounted(() => {
         <div class="flex items-center space-x-4">
           <span class="flex-shrink-0 w-[100px]">{{ $t('setting.userVipType') }}</span>
           <div class="flex-1">
-            <span> {{ testText1 }}</span>
+            <span> {{ userInfo.vip }}</span>
           </div>
         </div>
 
         <div class="flex items-center space-x-4">
           <span class="flex-shrink-0 w-[100px]">{{ $t('setting.userBalance') }}</span>
           <div class="flex-1">
-            <span> {{ testText1 }}</span>
+            <span> {{ userInfo.balance }}</span>
           </div>
         </div>
 
         <div class="flex items-center space-x-4">
           <span class="flex-shrink-0 w-[100px]">{{ $t('setting.userExpireTime') }}</span>
           <div class="flex-1">
-            <span> {{ testText1 }}</span>
+            <span> {{ userInfo.expire_time }}</span>
           </div>
         </div>
 
         <div class="flex items-center space-x-4">
           <span class="flex-shrink-0 w-[100px]">{{ $t('setting.userToken') }}</span>
           <div class="flex-1">
-            <span> {{ testText1 }}</span>
+            <span> {{ userInfo.total_token }}</span>
           </div>
         </div>
       </div>

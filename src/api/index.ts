@@ -137,9 +137,9 @@ export function fetchGetUsers<T = any>(page: number, size: number) {
   })
 }
 
-export function fetchUserInfo<T = any>() {
+export function fetchUserInfo<T>() {
   return get<T>({
-    url: '/user/chatUser-info',
+    url: '/user/chatUser',
   })
 }
 
