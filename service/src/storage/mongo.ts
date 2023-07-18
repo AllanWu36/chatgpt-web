@@ -226,7 +226,7 @@ export async function getUserById(userId: string): Promise<UserInfo> {
   if (userInfo.config == null)
     userInfo.config = new UserConfig()
   if (userInfo.config.chatModel == null)
-    userInfo.config.chatModel = 'gpt-3.5-turbo'
+    userInfo.config.chatModel = 'fast-gpt-3.5'
 
   return userInfo
 }
