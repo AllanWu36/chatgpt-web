@@ -148,7 +148,7 @@ async function handleRegister() {
     ms.success(result.message as string)
   }
   catch (error: any) {
-    ms.error(error.message ?? 'error')
+    ms.error(error.msg ?? 'error')
   }
   finally {
     loading.value = false
