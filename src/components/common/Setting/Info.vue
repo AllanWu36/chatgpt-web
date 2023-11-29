@@ -1,18 +1,17 @@
 <script setup lang='ts'>
 import { onMounted, ref } from 'vue'
-import { NSpin, useMessage } from 'naive-ui'
-import type { TextAuditServiceProvider } from './model'
+import { NSpin } from 'naive-ui'
 import { fetchUserInfo } from '@/api'
-const ms = useMessage()
+// const ms = useMessage()
 
 const loading = ref(false)
-const saving = ref(false)
-const testing = ref(false)
-const testText = ref<string>()
-const testText1 = ref<string>('nihao,zheshiyiduanjiantiwenzi')
-const serviceOptions: { label: string; key: TextAuditServiceProvider; value: TextAuditServiceProvider }[] = [
-  { label: '百度云', key: 'baidu', value: 'baidu' },
-]
+// const saving = ref(false)
+// const testing = ref(false)
+// const testText = ref<string>()
+// const testText1 = ref<string>('nihao,zheshiyiduanjiantiwenzi')
+// const serviceOptions: { label: string; key: TextAuditServiceProvider; value: TextAuditServiceProvider }[] = [
+//   { label: '百度云', key: 'baidu', value: 'baidu' },
+// ]
 
 const userInfo = ref({ vip: 0, balance: 0, expire_time: 0, total_token: 0 })
 

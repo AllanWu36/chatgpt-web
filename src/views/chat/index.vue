@@ -559,7 +559,7 @@ const chatModelOptions = [
   const label = model
   let v = ''
   if (model === 'fast-gpt-3.5')
-    v = 'gpt-3.5-turbo-16k'
+    v = 'gpt-3.5'
   else if (model === 'fast-gpt-4')
     v = 'gpt-4'
   return {
